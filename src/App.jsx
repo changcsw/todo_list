@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Bell,
@@ -8,6 +8,7 @@ import {
   Clock3,
   ListFilter,
   ListTodo,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 
 const STORAGE_KEY = "todo-reminder.tasks.v1";
+const STARTER_TASKS_KEY = "todo-reminder.seeded.v1";
 
 const FILTERS = [
   { value: "all", label: "全部" },
@@ -39,11 +41,6 @@ const REMINDER_OPTIONS = [
   { value: 1440, label: "提前 1 天" },
 ];
 
-const HEADER_METRICS = {
-  active: 5,
-  done: 10,
-};
-
 const priorityRank = {
   high: 3,
   medium: 2,
@@ -52,6 +49,57 @@ const priorityRank = {
 
 const NOTIFICATION_UNSUPPORTED = "unsupported";
 const NOTIFICATION_INSECURE = "insecure";
+
+const TASK_TEMPLATES = [
+  {
+    title: "整理今天最重要的三件事",
+    notes: "把优先级和预估耗时补充完整，避免临时切换任务。",
+    category: "工作",
+    priority: "high",
+    reminderMinutes: 15,
+    offsetMinutes: 90,
+  },
+  {
+    title: "回复本周待确认的消息",
+    notes: "优先处理需要明确时间和结论的对话。",
+    category: "沟通",
+    priority: "medium",
+    reminderMinutes: 30,
+    offsetMinutes: 180,
+  },
+  {
+    title: "晚上散步或拉伸 30 分钟",
+    notes: "结束工作前先准备好运动鞋或瑜伽垫。",
+    category: "个人",
+    priority: "low",
+    reminderMinutes: 60,
+    offsetMinutes: 720,
+  },
+  {
+    title: "检查并更新购物清单",
+    notes: "顺手补上本周常用消耗品，减少临时出门。",
+    category: "生活",
+    priority: "low",
+    reminderMinutes: 1440,
+    offsetMinutes: 1560,
+  },
+  {
+    title: "完成 25 分钟专注学习",
+    notes: "只定一个小目标，例如看完一节课程或做完一页笔记。",
+    category: "学习",
+    priority: "medium",
+    reminderMinutes: 15,
+    offsetMinutes: 2040,
+  },
+  {
+    title: "整理本周要跟进的待办",
+    notes: "把卡住的事项拆成下一步动作，方便继续推进。",
+    category: "规划",
+    priority: "high",
+    reminderMinutes: 30,
+    offsetMinutes: 2880,
+  },
+];
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -62,6 +110,11 @@ function toInputDateTime(date) {
   next.setMinutes(next.getMinutes() + 60);
   next.setSeconds(0, 0);
   return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T${pad(next.getHours())}:${pad(next.getMinutes())}`;
+}
+
+function toLocalDateTimeValue(value) {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function readStoredTasks() {
@@ -125,6 +178,40 @@ function getNotificationHelperText(permission) {
   return "建议先开启通知权限，提醒到点时会同时显示系统通知和页面提醒。";
 }
 
+function pickTaskTemplates(count) {
+  const pool = [...TASK_TEMPLATES];
+
+  for (let index = pool.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [pool[index], pool[swapIndex]] = [pool[swapIndex], pool[index]];
+  }
+
+  return pool.slice(0, count);
+}
+
+function createGeneratedTasks(count = 3) {
+  const createdAt = new Date().toISOString();
+
+  return pickTaskTemplates(count).map((template, index) => {
+    const dueAt = new Date();
+    dueAt.setMinutes(dueAt.getMinutes() + template.offsetMinutes + index * 15);
+    dueAt.setSeconds(0, 0);
+
+    return {
+      id: crypto.randomUUID(),
+      title: template.title,
+      notes: template.notes,
+      category: template.category,
+      priority: template.priority,
+      reminderMinutes: template.reminderMinutes,
+      dueAt: dueAt.toISOString(),
+      done: false,
+      createdAt,
+      notifiedAt: null,
+    };
+  });
+}
+
 function formatDateTime(value) {
   return new Intl.DateTimeFormat("zh-CN", {
     month: "short",
@@ -180,9 +267,11 @@ function emptyForm() {
 function App() {
   const [tasks, setTasks] = useState(readStoredTasks);
   const [form, setForm] = useState(emptyForm);
+  const [editingTaskId, setEditingTaskId] = useState(null);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState(null);
+  const composerRef = useRef(null);
   const [notificationPermission, setNotificationPermission] = useState(getNotificationPermissionState);
 
   useEffect(() => {
@@ -203,6 +292,19 @@ function App() {
       document.removeEventListener("visibilitychange", syncNotificationPermission);
     };
   }, []);
+
+  useEffect(() => {
+    if (tasks.length > 0 || localStorage.getItem(STARTER_TASKS_KEY)) return;
+
+    const starterTasks = createGeneratedTasks(3);
+    setTasks(starterTasks);
+    localStorage.setItem(STARTER_TASKS_KEY, "true");
+    setNotice({
+      id: "starter-tasks",
+      title: "已生成 3 条待办事项",
+      message: "可以直接开始勾选，也可以继续调整时间、优先级和备注。",
+    });
+  }, [tasks.length]);
 
   useEffect(() => {
     const checkReminders = () => {
@@ -247,12 +349,17 @@ function App() {
   const metrics = useMemo(() => {
     const active = tasks.filter((task) => !task.done);
     return {
-      active: HEADER_METRICS.active,
-      done: HEADER_METRICS.done,
+      active: active.length,
+      done: tasks.length - active.length,
       today: active.filter((task) => isToday(task.dueAt)).length,
       overdue: active.filter((task) => new Date(task.dueAt).getTime() < Date.now()).length,
     };
   }, [tasks]);
+
+  const editingTask = useMemo(
+    () => tasks.find((task) => task.id === editingTaskId) || null,
+    [editingTaskId, tasks],
+  );
 
   const filteredTasks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -367,26 +474,79 @@ function App() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function addTask(event) {
+  function resetForm(nextCategory = "个人") {
+    setForm({ ...emptyForm(), category: nextCategory });
+  }
+
+  function cancelEditing() {
+    setEditingTaskId(null);
+    resetForm(form.category.trim() || "个人");
+  }
+
+  function startEditing(task) {
+    setEditingTaskId(task.id);
+    setForm({
+      title: task.title,
+      notes: task.notes,
+      category: task.category,
+      priority: task.priority,
+      reminderMinutes: task.reminderMinutes,
+      dueAt: toLocalDateTimeValue(task.dueAt),
+    });
+    composerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function submitTask(event) {
     event.preventDefault();
     const title = form.title.trim();
     if (!title) return;
+    const category = form.category.trim() || "未分类";
+    const dueAt = new Date(form.dueAt).toISOString();
+    const reminderMinutes = Number(form.reminderMinutes);
+    const nextCategory = form.category.trim() || "个人";
+
+    if (editingTaskId) {
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === editingTaskId
+            ? {
+                ...task,
+                title,
+                notes: form.notes.trim(),
+                category,
+                priority: form.priority,
+                reminderMinutes,
+                dueAt,
+                notifiedAt: null,
+              }
+            : task,
+        ),
+      );
+      setNotice({
+        id: `edited-${editingTaskId}`,
+        title: "待办已更新",
+        message: `${title} 的内容已经保存。`,
+      });
+      setEditingTaskId(null);
+      resetForm(nextCategory);
+      return;
+    }
 
     const task = {
       id: crypto.randomUUID(),
       title,
       notes: form.notes.trim(),
-      category: form.category.trim() || "未分类",
+      category,
       priority: form.priority,
-      reminderMinutes: Number(form.reminderMinutes),
-      dueAt: new Date(form.dueAt).toISOString(),
+      reminderMinutes,
+      dueAt,
       done: false,
       createdAt: new Date().toISOString(),
       notifiedAt: null,
     };
 
     setTasks((current) => [task, ...current]);
-    setForm((current) => ({ ...emptyForm(), category: current.category }));
+    resetForm(nextCategory);
   }
 
   function toggleTask(id) {
@@ -405,6 +565,21 @@ function App() {
   function removeTask(id) {
     setTasks((current) => current.filter((task) => task.id !== id));
     if (notice?.id === id) setNotice(null);
+    if (editingTaskId === id) {
+      setEditingTaskId(null);
+      resetForm();
+    }
+  }
+
+  function addGeneratedTasks() {
+    const generatedTasks = createGeneratedTasks(3);
+    setTasks((current) => [...generatedTasks, ...current]);
+    localStorage.setItem(STARTER_TASKS_KEY, "true");
+    setNotice({
+      id: `generated-${generatedTasks[0].id}`,
+      title: "已添加 3 条随机待办",
+      message: "可以继续编辑内容，或者直接开始完成它们。",
+    });
   }
 
   return (
@@ -442,13 +617,15 @@ function App() {
       ) : null}
 
       <div className="workspace">
-        <aside className="composer" aria-label="新建待办">
+        <aside ref={composerRef} className="composer" aria-label={editingTask ? "修改待办" : "新建待办"}>
           <div className="section-title">
             <CalendarClock size={20} />
-            <h2>新建事项</h2>
+            <h2>{editingTask ? "修改事项" : "新建事项"}</h2>
           </div>
 
-          <form className="task-form" onSubmit={addTask}>
+          {editingTask ? <p className="composer-caption">正在修改：{editingTask.title}</p> : null}
+
+          <form className="task-form" onSubmit={submitTask}>
             <label>
               <span>事项</span>
               <input
@@ -521,10 +698,24 @@ function App() {
               />
             </label>
 
-            <button className="primary-button" type="submit">
-              <Plus size={18} />
-              <span>添加待办</span>
-            </button>
+            <div className={editingTask ? "composer-actions editing" : "composer-actions"}>
+              <button className="primary-button" type="submit">
+                {editingTask ? <Check size={18} /> : <Plus size={18} />}
+                <span>{editingTask ? "保存修改" : "添加待办"}</span>
+              </button>
+
+              {editingTask ? (
+                <button className="subtle-button" type="button" onClick={cancelEditing}>
+                  <X size={18} />
+                  <span>取消修改</span>
+                </button>
+              ) : null}
+
+              <button className="secondary-button" type="button" onClick={addGeneratedTasks}>
+                <ListTodo size={18} />
+                <span>随机生成 3 条</span>
+              </button>
+            </div>
           </form>
 
           <button
@@ -573,7 +764,14 @@ function App() {
           <div className="task-list">
             {filteredTasks.length > 0 ? (
               filteredTasks.map((task) => (
-                <TaskCard key={task.id} task={task} onToggle={toggleTask} onRemove={removeTask} />
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  isEditing={editingTaskId === task.id}
+                  onEdit={startEditing}
+                  onToggle={toggleTask}
+                  onRemove={removeTask}
+                />
               ))
             ) : (
               <div className="empty-state">
@@ -598,12 +796,12 @@ function Metric({ label, value, highlight = false }) {
   );
 }
 
-function TaskCard({ task, onToggle, onRemove }) {
+function TaskCard({ task, isEditing, onEdit, onToggle, onRemove }) {
   const status = getStatus(task);
   const priority = PRIORITIES.find((item) => item.value === task.priority) || PRIORITIES[1];
 
   return (
-    <article className={`task-card ${task.done ? "completed" : ""} ${status}`}>
+    <article className={`task-card ${task.done ? "completed" : ""} ${status} ${isEditing ? "editing" : ""}`}>
       <button
         className="complete-button"
         type="button"
@@ -638,14 +836,25 @@ function TaskCard({ task, onToggle, onRemove }) {
         ) : null}
       </div>
 
-      <button
-        className="icon-button danger-button"
-        type="button"
-        onClick={() => onRemove(task.id)}
-        title="删除待办"
-      >
-        <Trash2 size={18} />
-      </button>
+      <div className="task-actions">
+        <button
+          className="icon-button edit-button"
+          type="button"
+          onClick={() => onEdit(task)}
+          title="修改待办"
+        >
+          <Pencil size={18} />
+        </button>
+
+        <button
+          className="icon-button danger-button"
+          type="button"
+          onClick={() => onRemove(task.id)}
+          title="删除待办"
+        >
+          <Trash2 size={18} />
+        </button>
+      </div>
     </article>
   );
 }

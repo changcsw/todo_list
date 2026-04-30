@@ -190,12 +190,18 @@ h1 {
   gap: 14px;
 }
 
+.composer-caption {
+  margin: -6px 0 2px;
+  color: #5f584f;
+  font-size: 0.87rem;
+}
+
 .task-form label {
   display: grid;
   gap: 6px;
 }
 
-.task-form span {
+.task-form label > span {
   color: #5d564d;
   font-size: 0.85rem;
   font-weight: 700;
@@ -233,6 +239,8 @@ textarea:focus {
 }
 
 .primary-button,
+.subtle-button,
+.secondary-button,
 .notification-button,
 .filter-tabs button,
 .icon-button,
@@ -259,7 +267,9 @@ textarea:focus {
 }
 
 .primary-button span,
-.primary-button svg {
+.primary-button svg,
+.secondary-button span,
+.secondary-button svg {
   color: inherit;
 }
 
@@ -269,6 +279,48 @@ textarea:focus {
 
 .primary-button:active {
   background: #083f3b;
+}
+
+.composer-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.composer-actions.editing {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.composer-actions.editing .secondary-button {
+  grid-column: 1 / -1;
+}
+
+.subtle-button {
+  gap: 8px;
+  width: 100%;
+  border-color: #d7d1c6;
+  color: #5d564d;
+  background: #fbf8f2;
+  font-weight: 800;
+}
+
+.subtle-button:hover {
+  border-color: #b9b0a2;
+  background: #f4efe6;
+}
+
+.secondary-button {
+  gap: 8px;
+  width: 100%;
+  border-color: #bfd7d2;
+  color: #0f5f58;
+  background: #edf8f5;
+  font-weight: 800;
+}
+
+.secondary-button:hover {
+  border-color: #0f766e;
+  background: #e1f3ee;
 }
 
 .notification-button {
@@ -416,7 +468,7 @@ textarea:focus {
 
 .task-card {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: start;
   min-height: 112px;
@@ -445,6 +497,11 @@ textarea:focus {
   background: #f8f7f3;
 }
 
+.task-card.editing {
+  border-color: #9acbc2;
+  box-shadow: 0 0 0 3px rgb(15 118 110 / 12%);
+}
+
 .complete-button,
 .icon-button {
   width: 40px;
@@ -466,6 +523,18 @@ textarea:focus {
   border-color: #be123c;
   color: #be123c;
   background: #fff1f2;
+}
+
+.edit-button:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.task-actions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
 }
 
 .task-content {
@@ -636,9 +705,13 @@ textarea:focus {
   }
 
   .task-card {
-    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
     gap: 8px;
     padding: 10px;
+  }
+
+  .composer-actions.editing {
+    grid-template-columns: 1fr;
   }
 
   .complete-button,
