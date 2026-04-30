@@ -90,9 +90,9 @@ h1 {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(78px, 1fr));
+  grid-template-columns: repeat(4, minmax(78px, 1fr));
   gap: 8px;
-  width: min(390px, 100%);
+  width: min(520px, 100%);
 }
 
 .metric {
@@ -250,13 +250,25 @@ textarea:focus {
   gap: 8px;
   width: 100%;
   margin-top: 2px;
-  color: #fff;
-  background: #0f766e;
-  font-weight: 800;
+  border-color: #0a4f4a;
+  color: #f7fffd !important;
+  -webkit-text-fill-color: #f7fffd;
+  background: #0b6660;
+  font-weight: 900;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 18%);
+}
+
+.primary-button span,
+.primary-button svg {
+  color: inherit;
 }
 
 .primary-button:hover {
-  background: #0b5f59;
+  background: #094f4a;
+}
+
+.primary-button:active {
+  background: #083f3b;
 }
 
 .notification-button {
@@ -546,7 +558,7 @@ textarea:focus {
   }
 
   .metric-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .metric {

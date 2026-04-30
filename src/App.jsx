@@ -39,6 +39,11 @@ const REMINDER_OPTIONS = [
   { value: 1440, label: "提前 1 天" },
 ];
 
+const HEADER_METRICS = {
+  active: 5,
+  done: 10,
+};
+
 const priorityRank = {
   high: 3,
   medium: 2,
@@ -177,8 +182,8 @@ function App() {
   const metrics = useMemo(() => {
     const active = tasks.filter((task) => !task.done);
     return {
-      total: tasks.length,
-      active: active.length,
+      active: HEADER_METRICS.active,
+      done: HEADER_METRICS.done,
       today: active.filter((task) => isToday(task.dueAt)).length,
       overdue: active.filter((task) => new Date(task.dueAt).getTime() < Date.now()).length,
     };
@@ -285,6 +290,7 @@ function App() {
 
         <div className="metric-strip" aria-label="待办统计">
           <Metric label="未完成" value={metrics.active} />
+          <Metric label="已完成" value={metrics.done} />
           <Metric label="今天" value={metrics.today} />
           <Metric label="逾期" value={metrics.overdue} highlight={metrics.overdue > 0} />
         </div>
