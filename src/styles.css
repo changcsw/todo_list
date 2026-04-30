@@ -279,12 +279,78 @@ textarea:focus {
   color: #24534f;
   background: #f6fbf9;
   font-weight: 700;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease;
+}
+
+.notification-button:hover:not(:disabled) {
+  border-color: #0f766e;
+  background: #eef8f5;
+  box-shadow: 0 12px 24px rgb(15 118 110 / 10%);
+}
+
+.notification-button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.995);
+  background: #def1ec;
+  box-shadow: 0 6px 14px rgb(15 118 110 / 10%);
+}
+
+.notification-button:focus-visible {
+  border-color: #0f766e;
+  box-shadow:
+    0 0 0 3px rgb(15 118 110 / 15%),
+    0 12px 24px rgb(15 118 110 / 10%);
+  outline: none;
+}
+
+.notification-button.is-granted {
+  border-color: #9ccfc4;
+  color: #114b46;
+  background: linear-gradient(180deg, #effaf6 0%, #e1f3ed 100%);
+}
+
+.notification-button.is-granted:hover:not(:disabled) {
+  border-color: #0f766e;
+  background: linear-gradient(180deg, #e5f7f1 0%, #d7efe7 100%);
+}
+
+.notification-button.is-granted:active:not(:disabled) {
+  background: linear-gradient(180deg, #d9f0e8 0%, #cbe8df 100%);
+}
+
+.notification-button.is-denied {
+  border-color: #e5c48e;
+  color: #8a5a16;
+  background: linear-gradient(180deg, #fff8ef 0%, #fff2dd 100%);
+}
+
+.notification-button.is-denied:hover:not(:disabled) {
+  border-color: #d09a42;
+  background: linear-gradient(180deg, #fff2e1 0%, #ffe8c7 100%);
+  box-shadow: 0 12px 24px rgb(208 154 66 / 14%);
+}
+
+.notification-button.is-denied:active:not(:disabled) {
+  background: linear-gradient(180deg, #ffe8cb 0%, #ffdcae 100%);
+  box-shadow: 0 6px 14px rgb(208 154 66 / 14%);
 }
 
 .notification-button:disabled {
-  cursor: default;
+  cursor: not-allowed;
   color: #47655f;
   background: #edf7f4;
+  box-shadow: none;
+}
+
+.notification-hint {
+  margin-top: 10px;
+  color: #6b6459;
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .task-board {

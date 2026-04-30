@@ -50,6 +50,9 @@ const priorityRank = {
   low: 1,
 };
 
+const NOTIFICATION_UNSUPPORTED = "unsupported";
+const NOTIFICATION_INSECURE = "insecure";
+
 function pad(value) {
   return String(value).padStart(2, "0");
 }
@@ -67,6 +70,59 @@ function readStoredTasks() {
   } catch {
     return [];
   }
+}
+
+function getNotificationPermissionState() {
+  if (typeof window === "undefined") return NOTIFICATION_UNSUPPORTED;
+  if (!("Notification" in window)) return NOTIFICATION_UNSUPPORTED;
+  if (!window.isSecureContext) return NOTIFICATION_INSECURE;
+  return Notification.permission;
+}
+
+function showSystemNotification(title, options = {}) {
+  if (getNotificationPermissionState() !== "granted") return false;
+
+  try {
+    new Notification(title, options);
+    return true;
+  } catch (error) {
+    console.error("Failed to show system notification.", error);
+    return false;
+  }
+}
+
+function getNotificationButtonLabel(permission) {
+  if (permission === "granted") return "已开启通知";
+  if (permission === NOTIFICATION_UNSUPPORTED) return "当前浏览器不支持";
+  if (permission === NOTIFICATION_INSECURE) return "仅 localhost / HTTPS 可用";
+  if (permission === "denied") return "去浏览器里允许通知";
+  return "开启系统通知";
+}
+
+function getNotificationButtonClassName(permission) {
+  if (permission === "granted") return "notification-button is-granted";
+  if (permission === "denied") return "notification-button is-denied";
+  return "notification-button";
+}
+
+function getNotificationHelperText(permission) {
+  if (permission === "granted") {
+    return "授权成功后，会在到期前弹出系统通知，同时保留页面内提醒。";
+  }
+
+  if (permission === "denied") {
+    return "浏览器已经拦截通知，请在地址栏或系统设置里允许当前站点通知。";
+  }
+
+  if (permission === NOTIFICATION_INSECURE) {
+    return "系统通知只在 localhost 或 HTTPS 环境可用，直接打开文件或普通 HTTP 页面无法授权。";
+  }
+
+  if (permission === NOTIFICATION_UNSUPPORTED) {
+    return "当前环境不支持系统通知，不过页面内提醒仍然可以使用。";
+  }
+
+  return "建议先开启通知权限，提醒到点时会同时显示系统通知和页面提醒。";
 }
 
 function formatDateTime(value) {
@@ -127,14 +183,26 @@ function App() {
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState(null);
-  const [notificationPermission, setNotificationPermission] = useState(() => {
-    if (!("Notification" in window)) return "unsupported";
-    return Notification.permission;
-  });
+  const [notificationPermission, setNotificationPermission] = useState(getNotificationPermissionState);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
   }, [tasks]);
+
+  useEffect(() => {
+    const syncNotificationPermission = () => {
+      setNotificationPermission(getNotificationPermissionState());
+    };
+
+    syncNotificationPermission();
+    window.addEventListener("focus", syncNotificationPermission);
+    document.addEventListener("visibilitychange", syncNotificationPermission);
+
+    return () => {
+      window.removeEventListener("focus", syncNotificationPermission);
+      document.removeEventListener("visibilitychange", syncNotificationPermission);
+    };
+  }, []);
 
   useEffect(() => {
     const checkReminders = () => {
@@ -152,18 +220,15 @@ function App() {
           if (reminderAt > now) return task;
 
           const message = `${formatDateTime(task.dueAt)} 到期`;
-
-          if ("Notification" in window && Notification.permission === "granted") {
-            new Notification(`待办提醒：${task.title}`, {
-              body: message,
-              tag: task.id,
-            });
-          }
+          const delivered = showSystemNotification(`待办提醒：${task.title}`, {
+            body: message,
+            tag: task.id,
+          });
 
           setNotice({
             id: task.id,
             title: task.title,
-            message,
+            message: delivered ? message : `${message} · 系统通知未显示，已切换为页面提醒`,
           });
 
           changed = true;
@@ -217,18 +282,85 @@ function App() {
   }, [filter, query, tasks]);
 
   async function requestNotifications() {
-    if (!("Notification" in window)) {
-      setNotificationPermission("unsupported");
+    const currentPermission = getNotificationPermissionState();
+    setNotificationPermission(currentPermission);
+
+    if (currentPermission === NOTIFICATION_UNSUPPORTED) {
       setNotice({
-        id: "unsupported",
+        id: NOTIFICATION_UNSUPPORTED,
         title: "浏览器不支持系统通知",
         message: "页面内提醒仍会正常显示",
       });
       return;
     }
 
-    const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
+    if (currentPermission === NOTIFICATION_INSECURE) {
+      setNotice({
+        id: NOTIFICATION_INSECURE,
+        title: "当前环境无法授权通知",
+        message: "请在 localhost 或 HTTPS 环境中打开页面后再开启系统通知。",
+      });
+      return;
+    }
+
+    if (currentPermission === "granted") {
+      const delivered = showSystemNotification("系统通知已开启", {
+        body: "已发送测试通知，后续待办到点时会自动提醒你。",
+        tag: "todo-reminder.permission-test",
+      });
+
+      setNotice({
+        id: "notification-granted",
+        title: delivered ? "系统通知已开启" : "通知权限已授权",
+        message: delivered
+          ? "测试通知已经发送，后续提醒会继续通过系统通知和页面内提醒同时显示。"
+          : "浏览器权限已经开启，但测试通知没有显示，请检查系统通知设置是否拦截了浏览器。",
+      });
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(getNotificationPermissionState());
+
+      if (permission === "granted") {
+        const delivered = showSystemNotification("系统通知已开启", {
+          body: "已发送测试通知，后续待办到点时会自动提醒你。",
+          tag: "todo-reminder.permission-test",
+        });
+
+        setNotice({
+          id: "notification-granted",
+          title: delivered ? "系统通知已开启" : "通知权限已授权",
+          message: delivered
+            ? "测试通知已经发送，后续提醒会继续通过系统通知和页面内提醒同时显示。"
+            : "浏览器权限已经开启，但测试通知没有显示，请检查系统通知设置是否拦截了浏览器。",
+        });
+        return;
+      }
+
+      if (permission === "denied") {
+        setNotice({
+          id: "notification-denied",
+          title: "系统通知被拦截",
+          message: "请在浏览器地址栏或系统设置里允许当前站点通知，然后回到页面重试。",
+        });
+        return;
+      }
+
+      setNotice({
+        id: "notification-default",
+        title: "还没有开启系统通知",
+        message: "浏览器没有完成授权，本应用会继续使用页面内提醒。",
+      });
+    } catch (error) {
+      console.error("Failed to request notification permission.", error);
+      setNotice({
+        id: "notification-error",
+        title: "无法请求系统通知",
+        message: "请确认当前页面运行在 localhost 或 HTTPS 环境，并检查浏览器是否允许弹出通知授权。",
+      });
+    }
   }
 
   function updateForm(field, value) {
@@ -396,20 +528,20 @@ function App() {
           </form>
 
           <button
-            className="notification-button"
+            className={getNotificationButtonClassName(notificationPermission)}
             type="button"
             onClick={requestNotifications}
-            disabled={notificationPermission === "granted"}
+            disabled={
+              notificationPermission === NOTIFICATION_UNSUPPORTED ||
+              notificationPermission === NOTIFICATION_INSECURE
+            }
+            aria-pressed={notificationPermission === "granted"}
           >
             <Bell size={18} />
-            <span>
-              {notificationPermission === "granted"
-                ? "系统通知已开启"
-                : notificationPermission === "unsupported"
-                  ? "使用页面提醒"
-                  : "开启系统通知"}
-            </span>
+            <span>{getNotificationButtonLabel(notificationPermission)}</span>
           </button>
+
+          <p className="notification-hint">{getNotificationHelperText(notificationPermission)}</p>
         </aside>
 
         <section className="task-board" aria-label="待办列表">
