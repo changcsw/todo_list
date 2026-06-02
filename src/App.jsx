@@ -107,8 +107,7 @@ function pad(value) {
 
 function toInputDateTime(date) {
   const next = new Date(date);
-  next.setMinutes(next.getMinutes() + 60);
-  next.setSeconds(0, 0);
+  next.setHours(18, 30, 0, 0);
   return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T${pad(next.getHours())}:${pad(next.getMinutes())}`;
 }
 
